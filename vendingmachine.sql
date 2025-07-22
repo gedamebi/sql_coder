@@ -5,8 +5,8 @@ CREATE TABLE `ubicaciones` (
   `id_ubicacion` int AUTO_INCREMENT PRIMARY KEY,
   `direccion` varchar(50) NOT NULL,
   `ciudad` varchar(50),
-  `latitud` double,
-  `longitud` double,
+  `latitud` real,
+  `longitud` real,
   `tel_contacto` varchar(50)
 );
 
@@ -23,7 +23,7 @@ CREATE TABLE `productos` (
   `id_producto` int AUTO_INCREMENT PRIMARY KEY,
   `tipo` tinyint NOT NULL, -- 0: Recarga, 1: Con envase
   `descripcion` varchar(50) NOT NULL,
-  `precio` double NOT NULL
+  `precio` real NOT NULL
 );
 
 CREATE TABLE `ventas` (
@@ -33,7 +33,7 @@ CREATE TABLE `ventas` (
   `id_maquina` int NOT NULL,
   `estado` varchar(15) NOT NULL, -- pendiente, completada, rechazada, devolucion
   `metodo_pago` tinyint NOT NULL, -- 0: Mercado Pago, 1: POS
-  `purchase` int NOT NULL
+  `purchase` real NOT NULL
 );
 
 CREATE TABLE `operadores` (
