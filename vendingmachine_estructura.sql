@@ -42,6 +42,24 @@ CREATE TABLE `operadores` (
   `password` varchar(255) NOT NULL
 );
 
+CREATE TABLE `reportes_fallas` (
+  `id_reporte` int AUTO_INCREMENT PRIMARY KEY,
+  `id_operador` int NOT NULL,
+  `id_maquina` int NOT NULL,
+  `fecha` datetime DEFAULT CURRENT_TIMESTAMP,
+  `fallaDetalle` varchar(255) NOT NULL,
+  `estado` enum('pendiente','solucionado') DEFAULT 'pendiente'
+);
+
+CREATE TABLE `fallas_solucionadas` (
+  `id_fallaSolucionada` int AUTO_INCREMENT PRIMARY KEY,
+  `id_reporte_falla` int NOT NULL,
+  `id_tecnico` int NOT NULL,
+  `fecha` datetime DEFAULT CURRENT_TIMESTAMP,
+  `detalleSolucion` varchar(255) NOT NULL
+);
+
+
 CREATE TABLE `tecnicos` (
   `id_tecnico` int AUTO_INCREMENT PRIMARY KEY,
   `tecnico` varchar(10) UNIQUE NOT NULL,
@@ -71,6 +89,14 @@ ALTER TABLE `ventas` ADD FOREIGN KEY (`id_producto`) REFERENCES `productos` (`id
 ALTER TABLE `ventas` ADD FOREIGN KEY (`id_maquina`) REFERENCES `maquinas` (`id_maquina`);
 
 ALTER TABLE `operadores` ADD FOREIGN KEY (`id_maquina`) REFERENCES `maquinas` (`id_maquina`);
+
+ALTER TABLE `reportes_fallas` ADD FOREIGN KEY (`id_maquina`) REFERENCES `maquinas` (`id_maquina`);
+
+ALTER TABLE `reportes_fallas` ADD FOREIGN KEY (`id_operador`) REFERENCES `operadores` (`id_operador`);
+
+ALTER TABLE `fallas_solucionadas` ADD FOREIGN KEY (`id_reporte_falle`) REFERENCES `reportes_fallas` (`id_reporte`);
+
+ALTER TABLE `fallas_solucionadas` ADD FOREIGN KEY (`id_tecnico`) REFERENCES `tecnicos` (`id_tecnico`);
 
 ALTER TABLE `reposiciones` ADD FOREIGN KEY (`id_maquina`) REFERENCES `maquinas` (`id_maquina`);
 

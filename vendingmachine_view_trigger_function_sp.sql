@@ -1,5 +1,5 @@
 
--- Este script incluye dos vistas, una funcion, un procedimiento almacenado y un trigger
+-- Este script incluye cinco vistas, dos funciones, dos procedimientos almacenados y dos triggers
 
 -- ========================================================================
 -- 1. VISTA: vista_maquinas
@@ -49,11 +49,93 @@ INNER JOIN
     ubicaciones u ON m.id_ubicacion = u.id_ubicacion;
 
 
--- procedimientos almacenados y triggers.
+-- ========================================================================
+-- 3. VISTA: vista_reportes_fallas_pendientes
+-- ------------------------------------------------------------------------
+-- Descripcion:
+-- Muestra informacion detallada de los reportes de fallas que estan pendientes,
+-- incluyendo datos de las tablas 'operadores', 'maquinas' y 'ubicaciones'.
+-- ========================================================================
+CREATE VIEW vista_reportes_fallas_pendientes AS
+SELECT
+    rf.id_reporte,
+    rf.fecha,
+    rf.fallaDetalle,
+    rf.estado,
+    u.direccion AS ubicacion_maquina,
+    u.ciudad AS ciudad_maquina,
+    u.tel_contacto AS telefono_contacto,
+    o.operador AS nombre_operador
+FROM
+    reportes_fallas rf
+JOIN
+    maquinas m ON rf.id_maquina = m.id_maquina
+JOIN
+    ubicaciones u ON m.id_ubicacion = u.id_ubicacion
+JOIN
+    operadores o ON rf.id_operador = o.id_operador
+WHERE
+    rf.estado = 'pendiente';
+
+
+
+-- ========================================================================
+-- 4. VISTA: vista_fallas_solucionadas
+-- ------------------------------------------------------------------------
+-- Descripcion:
+-- Muestra informacion detallada de las soluiciones a fallas reportadas,
+-- incluyendo datos de las tablas 'fallas_solucionadas', 'reportes_fallas' y 'tecnicos'.
+-- ========================================================================
+CREATE VIEW vista_fallas_solucionadas AS
+SELECT
+    rf.id_reporte AS id_falla,
+    rf.fallaDetalle AS detalle_falla,
+    rf.fecha AS fecha_falla,
+    t.tecnico AS tecnico_solucionador,
+    fs.fecha AS fecha_solucion,
+    fs.detalleSolucion AS detalle_solucion
+FROM
+    fallas_solucionadas fs
+JOIN
+    reportes_fallas rf ON fs.id_reporte_falla = rf.id_reporte
+JOIN
+    tecnicos t ON fs.id_tecnico = t.id_tecnico;
+
+
+
+-- ========================================================================
+-- 5. VISTA: vista_mantenimientos
+-- ------------------------------------------------------------------------
+-- Descripcion:
+-- Muestra informacion detallada de los mantenimientos realizados,
+-- incluyendo datos de las tablas 'mantenimientos', 'maquinas', 'ubicaciones' y 'tecnicos'.
+-- ========================================================================
+CREATE VIEW vista_mantenimientos AS
+SELECT
+    mant.id_mantenimiento AS id_mantenimiento,
+    mant.fecha AS fecha,
+    mant.detalle AS detalle,
+    m.id_maquina AS id_maquina,
+    u.direccion AS ubicacion_maquina,
+    u.ciudad AS ciudad_maquina,
+    t.tecnico AS tecnico_realizador
+FROM
+    mantenimientos mant
+JOIN
+    maquinas m ON mant.id_maquina = m.id_maquina
+JOIN
+    ubicaciones u ON m.id_ubicacion = u.id_ubicacion
+JOIN
+    tecnicos t ON mant.id_tecnico = t.id_tecnico;
+
+
+
+
+-- procedimientos almacenados, funciones y triggers.
 DELIMITER $$
 
 -- ========================================================================
--- 3. FUNCION: fn_total_ventas_maquina
+-- 1. FUNCION: fn_total_ventas_maquina
 -- ------------------------------------------------------------------------
 -- Descripcion:
 -- Calcula el total de ventas completadas para una maquina especifica.
@@ -75,8 +157,36 @@ BEGIN
     RETURN IFNULL(total_vendido, 0);
 END$$
 
+
 -- ========================================================================
--- 4. PROCEDIMIENTO ALMACENADO: sp_generar_reporte_ventas_mensual
+-- 2. FUNCION: fn_total_reparaciones_tecnico
+-- ------------------------------------------------------------------------
+-- Descripcion:
+-- Calcula el total de reparaciones realizadas por un tecnico especifico.
+-- Retorna un valor INT que representa el numero total de reparaciones.
+-- Si no hay reparaciones, devuelve 0.
+-- ========================================================================
+CREATE FUNCTION fn_total_reparaciones_tecnico(
+    p_id_tecnico INT
+)
+RETURNS INT
+READS SQL DATA
+BEGIN
+    DECLARE total_reparaciones INT;
+    SELECT
+        COUNT(*)
+    INTO
+        total_reparaciones
+    FROM
+        fallas_solucionadas
+    WHERE
+        id_tecnico = p_id_tecnico;
+    RETURN IFNULL(total_reparaciones, 0);
+END$$
+
+
+-- ========================================================================
+-- 1. PROCEDIMIENTO ALMACENADO: sp_generar_reporte_ventas_mensual
 -- ------------------------------------------------------------------------
 -- Descripcion:
 -- Genera un reporte detallado y un resumen de las ventas mensuales
@@ -127,8 +237,83 @@ BEGIN
 
 END$$
 
+
 -- ========================================================================
--- 5. TRIGGER: tr_actualizar_stock
+-- 2. PROCEDIMIENTO ALMACENADO: sp_contar_fallas_por_maquina
+-- ------------------------------------------------------------------------
+-- Descripcion:
+-- Genera un reporte que lista todas las maquinas expendedoras
+-- y por cada maquina mostrar cuantos reportes de fallos se han reportado
+-- para cada una de ellas. de esta manera podemos saber estadisticamente
+-- cuales maquinas tienen mas fallas reportadas.
+-- ========================================================================
+CREATE PROCEDURE sp_contar_fallas_por_maquina()
+BEGIN
+    SELECT
+        m.id_maquina,
+        COUNT(rf.id_reporte) AS total_fallas_reportadas
+    FROM
+        maquinas m
+    LEFT JOIN
+        reportes_fallas rf ON m.id_maquina = rf.id_maquina
+    GROUP BY
+        m.id_maquina
+    ORDER BY
+        m.id_maquina;
+END$$
+
+
+-- ========================================================================
+-- 3. PROCEDIMIENTO ALMACENADO: sp_registrar_reposicion
+-- ------------------------------------------------------------------------
+-- Descripcion:
+-- Procedimiento almacenado para registrar una reposicion de stock
+-- en una maquina expendedora y actualizar el stock actual de la maquina.
+-- usando transacciones para asegurar la integridad de la base de datos.
+-- ========================================================================
+CREATE PROCEDURE sp_registrar_reposicion(
+    IN p_id_maquina INT,
+    IN p_id_operador INT,
+    IN p_cantidad TINYINT
+)
+BEGIN
+    -- Declara una variable para manejar errores.
+    DECLARE v_error BOOLEAN DEFAULT FALSE;
+
+    -- Define un handler para manejar cualquier excepción (error)
+    -- Si ocurre un error, se establece la variable v_error a TRUE.
+    DECLARE CONTINUE HANDLER FOR SQLEXCEPTION
+    BEGIN
+        SET v_error = TRUE;
+    END;
+
+    -- Inicia la transacción.
+    START TRANSACTION;
+
+    -- Paso 1: Inserta el registro en la tabla de reposiciones.
+    INSERT INTO reposiciones (fecha, cantidad, id_maquina, id_operador)
+    VALUES (NOW(), p_cantidad, p_id_maquina, p_id_operador);
+
+    -- Paso 2: Actualiza el stock de la maquina.
+    UPDATE maquinas
+    SET stock_actual = stock_actual + p_cantidad
+    WHERE id_maquina = p_id_maquina;
+
+    -- Verifica si ha ocurrido un error
+    IF v_error THEN
+        -- Si hubo un error, revierte todos los cambios de la transacción.
+        ROLLBACK;
+        SELECT 'Error: No se pudo completar la reposición. La transacción ha sido revertida.' AS resultado;
+    ELSE
+        -- Si todo fue exitoso, confirma los cambios.
+        COMMIT;
+        SELECT 'Éxito: La reposición ha sido registrada y el stock actualizado.' AS resultado;
+    END IF;
+
+END$$
+
+-- ========================================================================
+-- 1. TRIGGER: tr_actualizar_stock
 -- ------------------------------------------------------------------------
 -- Descripcion:
 -- Actualiza automaticamente el stock de una maquina expendedora
@@ -150,6 +335,28 @@ BEGIN
         SET stock_actual = stock_actual + 1
         WHERE id_maquina = NEW.id_maquina;
     END IF;
+END$$
+
+
+-- ========================================================================
+-- 1. TRIGGER: tr_actualizar_estado_falla
+-- ------------------------------------------------------------------------
+-- Descripcion:
+-- Actualiza automaticamente el repor de una falla en la tabla 'reportes_fallas'
+-- cambia el estado de pendiente a solucionado despues de que se insertada una fila
+-- en la tabla 'fallas_solucionadas'.
+-- ========================================================================
+CREATE TRIGGER tr_actualizar_estado_falla
+AFTER INSERT ON fallas_solucionadas
+FOR EACH ROW
+BEGIN
+    -- Actualiza el estado de la falla en la tabla 'reportes_fallas'
+    -- usando el id_reporte_falla de la nueva fila insertada.
+    UPDATE reportes_fallas
+    SET
+        estado = 'solucionado'
+    WHERE
+        id_reporte = NEW.id_reporte_falla;
 END$$
 
 
