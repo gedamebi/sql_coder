@@ -1,5 +1,5 @@
 
--- Este script incluye cinco vistas, dos funciones, dos procedimientos almacenados y dos triggers
+-- Este script incluye cinco vistas, dos funciones, tres procedimientos almacenados y dos triggers
 
 -- ========================================================================
 -- 1. VISTA: vista_maquinas
