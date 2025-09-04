@@ -94,7 +94,7 @@ ALTER TABLE `reportes_fallas` ADD FOREIGN KEY (`id_maquina`) REFERENCES `maquina
 
 ALTER TABLE `reportes_fallas` ADD FOREIGN KEY (`id_operador`) REFERENCES `operadores` (`id_operador`);
 
-ALTER TABLE `fallas_solucionadas` ADD FOREIGN KEY (`id_reporte_falle`) REFERENCES `reportes_fallas` (`id_reporte`);
+ALTER TABLE `fallas_solucionadas` ADD FOREIGN KEY (`id_reporte_falla`) REFERENCES `reportes_fallas` (`id_reporte`);
 
 ALTER TABLE `fallas_solucionadas` ADD FOREIGN KEY (`id_tecnico`) REFERENCES `tecnicos` (`id_tecnico`);
 
